@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Runtime state / per-run artifacts
+_cylinder_model*.txt
+_shot.txt
+_target.txt
+_line_go.txt
+_leverlog.txt
+*.log
+
+# OS
+Thumbs.db
+.DS_Store

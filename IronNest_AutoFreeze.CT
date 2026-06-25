@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CheatTable CheatEngineTableVersion="45">
+  <CheatEntries>
+    <CheatEntry>
+      <ID>1000</ID>
+      <Description>"IRON NEST - AUTO FREEZE (Timer + Requisition). Tick the box to enable."</Description>
+      <Options moHideChildren="1"/>
+      <VariableType>Auto Assembler Script</VariableType>
+      <AssemblerScript>[ENABLE]
+{$lua}
+if syntaxcheck then return end
+--========================================================================
+-- IRON NEST Heavy Turret Simulator - automatic freezer
+-- Resolves singletons via the game's IL2CPP API. No manual scanning.
+-- Requisition freeze is tamper-clean: it holds a self-consistent snapshot
+-- of the ProtectedInt (encryptedValue+key+checksum) and clears the flags,
+-- so CheckTampered never fires.
+--========================================================================
+
+-- 0  = freeze requisition at whatever you currently have (100% safe).
+-- &gt;0 = force this amount first via the game's own setter, then freeze.
+local DESIRED_POINTS = 0
+
+if IRN then
+  if IRN.master then IRN.master.destroy() end
+  if IRN.freeze then IRN.freeze.destroy() end
+end
+IRN = { desired = DESIRED_POINTS, S = {} }
+local S = IRN.S
+
+IRN.buf = IRN.buf or allocateMemory(512)
+local buf = IRN.buf
+
+local function E(n) return getAddressSafe(n) end
+local function ensureF()
+  if S.F and S.F.dom then return S.F end
+  local F = {
+    dom   = E("il2cpp_domain_get"),
+    asms  = E("il2cpp_domain_get_assemblies"),
+    img   = E("il2cpp_assembly_get_image"),
+    iname = E("il2cpp_image_get_name"),
+    cfn   = E("il2cpp_class_from_name"),
+    ffn   = E("il2cpp_class_get_field_from_name"),
+    fsget = E("il2cpp_field_static_get_value"),
+    cinit = E("il2cpp_runtime_class_init"),
+    mfn   = E("il2cpp_class_get_method_from_name"),
+  }
+  if F.dom and F.cfn then S.F = F end
+  return F
+end
+
+local function cstr(s, slot)
+  local a = buf + slot
+  local t = {}
+  for i = 1, #s do t[i] = string.byte(s, i) end
+  t[#s + 1] = 0
+  writeBytes(a, t)
+  return a
+end
+local function call(addr, ...) return executeCodeEx(3000, nil, addr, ...) end
+
+local function resolveImage(F)
+  local d = call(F.dom); if not d or d == 0 then return end
+  local sp = buf + 400; writeQword(sp, 0)
+  local arr = call(F.asms, d, sp)
+  local n = readInteger(sp) or 0
+  for i = 0, n - 1 do
+    local a = readPointer(arr + i * 8)
+    if a and a ~= 0 then
+      local im = call(F.img, a)
+      local np = call(F.iname, im)
+      local nm = (np and np ~= 0) and readString(np, 64, false) or ""
+      if nm == "Assembly-CSharp.dll" then S.image = im; return end
+    end
+  end
+end
+
+local function getClass(F, name, slot)
+  local ns = cstr("", slot)
+  local cn = cstr(name, slot + 2)
+  return call(F.cfn, S.image, ns, cn)
+end
+
+local function staticInst(F, klass, field, slot)
+  call(F.cinit, klass)
+  local fld = call(F.ffn, klass, cstr(field, slot))
+  if not fld or fld == 0 then return nil end
+  local op = buf + 440; writeQword(op, 0)
+  call(F.fsget, fld, op)
+  local p = readPointer(op)
+  if not p or p == 0 then return nil end
+  return p
+end
+
+local function resolveTick()
+  local F = ensureF()
+  if not (F.dom and F.cfn) then return end
+  if not S.image then resolveImage(F) end
+  if not S.image then return end
+  if not S.timerClass then S.timerClass = getClass(F, "CounterBatteryTimer", 0) end
+  if not S.statsClass then S.statsClass = getClass(F, "MissionStatsTracker", 60) end
+
+  if S.timerClass and S.timerClass ~= 0 then
+    local ti = staticInst(F, S.timerClass, "&lt;Instance&gt;k__BackingField", 120)
+    if ti then
+      if ti ~= S.timerInst then S.timerInst = ti; S.timerTarget = readFloat(ti + 0x5C) end
+    else S.timerInst = nil end
+  end
+
+  if S.statsClass and S.statsClass ~= 0 then
+    local si = staticInst(F, S.statsClass, "Instance", 160)
+    if si then
+      if si ~= S.statsInst then S.statsInst = si; S.ptsSnap = nil; S.didSet = false end
+      if IRN.desired &gt; 0 and not S.didSet then
+        if not S.setM then S.setM = call(F.mfn, S.statsClass, cstr("SetRequisitionPoints", 200), 1) end
+        if S.setM and S.setM ~= 0 then
+          local mp = readPointer(S.setM)
+          if mp and mp ~= 0 then call(mp, si, IRN.desired, S.setM) end
+        end
+        S.didSet = true
+        S.ptsSnap = nil
+      end
+      if not S.ptsSnap then S.ptsSnap = readBytes(si + 0x30, 16, true) end
+    else S.statsInst = nil end
+  end
+end
+
+local function freezeTick()
+  if S.timerInst and S.timerTarget then writeFloat(S.timerInst + 0x5C, S.timerTarget) end
+  if S.statsInst and S.ptsSnap then
+    writeBytes(S.statsInst + 0x30, S.ptsSnap)  -- requisitionPoints + reqPoints(enc,key,checksum)
+    writeBytes(S.statsInst + 0x41, 0)          -- reqPoints.WasTampered = false
+    writeBytes(S.statsInst + 0x44, 0)          -- requisitionPointsTampered = false
+  end
+end
+
+IRN.master = createTimer(getMainForm())
+IRN.master.Interval = 1000
+IRN.master.OnTimer = function()
+  local ok, e = pcall(resolveTick)
+  if not ok then print("[IRON] resolve error: " .. tostring(e)) end
+end
+IRN.freeze = createTimer(getMainForm())
+IRN.freeze.Interval = 40
+IRN.freeze.OnTimer = function() pcall(freezeTick) end
+
+print("[IRON] Auto-freeze ENABLED. Load into a mission; timer + requisition lock on automatically.")
+{$asm}
+
+[DISABLE]
+{$lua}
+if syntaxcheck then return end
+if IRN then
+  if IRN.master then IRN.master.destroy(); IRN.master = nil end
+  if IRN.freeze then IRN.freeze.destroy(); IRN.freeze = nil end
+end
+print("[IRON] Auto-freeze DISABLED.")
+{$asm}
+</AssemblerScript>
+    </CheatEntry>
+  </CheatEntries>
+</CheatTable>
