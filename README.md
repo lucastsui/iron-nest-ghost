@@ -1,63 +1,57 @@
-# IRON NEST — Autonomous Turret Autoloader ("Ghost")
+# IRON NEST Autonomous Turret Autoloader (Ghost)
 
-A Python tool that autonomously plays **IRON NEST: Heavy Turret Simulator (Demo)** by reading and
-writing the game's memory from an external process (`ctypes` `ReadProcessMemory`/`WriteProcessMemory`)
-and invoking its **IL2CPP runtime** directly. It runs a fully hands-off, dual-gun artillery
-fire-control loop: acquire target → compute firing solution → stock/cycle/ram/charge → elevate →
-fire, both guns pipelined in a round-robin.
+This is a Python program that plays the game IRON NEST, a heavy turret artillery simulator demo, all on its own. It reads and writes the running game's memory from an outside process, using the Windows calls `ReadProcessMemory` and `WriteProcessMemory` through `ctypes`, and it calls straight into the game's IL2CPP runtime. Once it starts, no human touches the controls. It runs a fire-control loop that drives both guns at the same time. For each shot it finds a target, works out the firing solution, stocks and cycles and rams and charges the gun, raises the barrel, and fires. The two guns share one turret and take turns in a round robin.
 
-> Authorized reverse-engineering / modding of a **single-player demo** on the author's own machine,
-> for research and educational purposes. It manipulates only the local game process.
+> This is authorized reverse engineering and modding of a single player demo, done on the author's own machine for research and learning. It changes only the local game process and nothing else.
 
----
+## Demo
+
+[![Machine Spirit in Heavy Artillery](https://img.youtube.com/vi/Gz33NfPVncA/maxresdefault.jpg)](https://www.youtube.com/watch?v=Gz33NfPVncA)
+
+The video above shows the loader running both guns with no human help. Click the picture to watch it on YouTube.
 
 ## Architecture
 
-| File | Role |
-|------|------|
-| `ironnest_ghost.py` | The **ghost**: process attach, RPM/WPM, an inline main-thread call executor, and IL2CPP resolution (domain → assemblies → classes → methods/fields via `il2cpp_*` exports). |
-| `ironnest_probe.py` | Field-offset probe / map for `TurretController`, `GunController`, etc. |
-| `ironnest_parallel_rr.py` | **The autoloader.** The pipelined dual-gun round-robin fire-control loop (the main program). |
-| `draw_from_player.py` | Targeting: reads the player grid position, draws the map line to a target, and picks the shell type (the icon-based shell picker). |
-| `scan_enemies.py` / `scan_artillery.py` | Read-only live-target scanners (by entity icon / health). |
-| `remove_line.py` | Clears drawn map-marker lines. |
-| `discharge_clean.py` | Utility: discharges any chambered round and resets both guns to a clean BreechOpen state. |
-| `check_both_guns.py` | Diagnostic: dumps each gun's reload state / chambered / CanFire / cylinder occupancy / elevation. |
-| `find_valves_full.py` | Maps the steam-valve pressure system (all `ValveController`s, their dials/levers, and `HighPressureSystemManager`s). |
-| `IronNest_AutoFreeze.CT`, `IronNest_Freeze.bat`, `ironnest_freezer.py` | Cheat Engine table + freezer helpers. |
+- `ironnest_ghost.py` is the ghost layer. It attaches to the game process, does the memory reads and writes, runs an inline executor that calls game methods on the main thread, and resolves IL2CPP names by walking from the domain down to the assemblies, then the classes, and then the methods and fields through the `il2cpp_*` exports.
+- `ironnest_probe.py` probes and maps the field offsets for `TurretController`, `GunController`, and the other game classes.
+- `ironnest_parallel_rr.py` is the autoloader and the main program. It runs the pipelined two gun round robin fire-control loop.
+- `draw_from_player.py` handles targeting. It reads the player's grid position, draws the map line to a target, and picks the shell type with the icon based shell picker.
+- `scan_enemies.py` and `scan_artillery.py` are read only scanners that find live targets by their entity icon and health.
+- `remove_line.py` clears the drawn map marker lines.
+- `discharge_clean.py` is a helper that discharges any chambered round and resets both guns to a clean BreechOpen state.
+- `check_both_guns.py` is a diagnostic that dumps each gun's reload state, whether it is chambered, whether it can fire, how full the cylinder is, and its elevation.
+- `find_valves_full.py` maps the steam valve pressure system, which covers all the `ValveController` objects, their dials and levers, and the `HighPressureSystemManager` objects.
+- `IronNest_AutoFreeze.CT`, `IronNest_Freeze.bat`, and `ironnest_freezer.py` are the Cheat Engine table and the freezer helpers.
 
-## Hard-won reverse-engineered mechanics
+## Reverse-engineered mechanics
 
-- **Reload state machine** — `ArtilleryReloadController.reloadState` (0 BreachLocked → 1 BreachUnlocking → 2 → 3 BreechOpen → 5 SelectPowderCharge). The breech is **locked** while the barrel is elevated and only opens after the gun returns to level; ramming requires level.
-- **Mid-leveling cylinder cycle** — the cylinder rotate-lever (`moveButton`) is *live during the whole post-fire leveling descent*, gated by the game's own `moveButton.isActive` flag (which self-disables at the one unsafe instant). So the cylinder can be cycled to the next shell *while the gun is still lowering*, fully overlapping leveling. Rotation is done blind during the descent, then verified by an authoritative breech read once the breech settles.
-- **Steam-valve pressure system** — 23 `ValveController`s ("PressureValve") gate the ram / cylinder / charge / elevation / traverse mechanisms. When valves leak (`currentDamage01` → 1) the affected mechanism silently stops responding. The autoloader scans all valves each loop and reseals any leak by turning its dial (`DialInteractable`) back to `fixedValue`.
+These are the game internals that took real work to figure out.
+
+- The reload state machine lives in `ArtilleryReloadController.reloadState`. It runs through numbered states from 0 to 5, where 0 is BreachLocked, 1 is BreachUnlocking, 3 is BreechOpen, and 5 is SelectPowderCharge. The breech stays locked while the barrel is raised, and it only opens after the gun comes back down to level. Ramming a round also needs the gun at level.
+- The cylinder rotate lever, called `moveButton`, stays live through the whole leveling descent after a shot. The game's own `moveButton.isActive` flag guards it and switches itself off at the one unsafe instant. Because of that, the loader can turn the cylinder to the next shell while the gun is still coming down, so the rotation overlaps the leveling completely. The turn happens blind during the descent, and a trusted breech read confirms it once the breech settles.
+- The steam valve pressure system has 23 `ValveController` objects, each one a PressureValve, and they gate the ram, the cylinder, the charge, the elevation, and the traverse. When a valve leaks and its `currentDamage01` climbs toward 1, the mechanism it feeds quietly stops responding. The autoloader checks every valve on each pass of the loop and reseals any leak by turning its dial, a `DialInteractable`, back to `fixedValue`.
 
 ## Optimizations in the autoloader
 
-- **Charge-6 ballistics** — always max powder → flattest trajectory → lowest elevation → least servo travel.
-- **Early bearing** — the shared turret slews to the next-to-fire gun as soon as its card exists.
-- **Servo leveling** — sets *desired* elevation to level (immersive, not a snap).
-- **Mid-leveling cylinder overlap** — cycle the cylinder during the leveling descent (see above).
-- **Rank-based aim** — aim at the gun that will fire *soonest* (by load progress), not nearest bearing, to avoid wasted turret "ping-pong".
-- **Steam-valve auto-reseal** — never pressure-stalls.
-- **Shell selection** — armored targets (tanks, bunkers/caches, **FDCs**) → AP; soft (infantry, field artillery) → HE.
+- The loader always uses charge 6, the maximum powder. That gives the flattest path, the lowest barrel elevation, and the least servo travel.
+- The shared turret swings toward the next gun to fire as soon as that gun's card exists, so the bearing is ready early.
+- Leveling sets the desired elevation back to level and lets the servo drive the barrel down smoothly, the way the real mechanism would move.
+- The loader cycles the cylinder during the leveling descent, which overlaps the two steps as described above.
+- The loader aims at the gun that will fire soonest, judged by how far along its reload is, so the turret keeps its swings short and avoids bouncing between the two guns.
+- The loader reseals steam valves on its own, so it never stalls for lack of pressure.
+- The loader picks the shell to match the target. Armored targets like tanks, bunkers, caches, and fire direction centers get AP rounds, and soft targets like infantry and field artillery get HE rounds.
 
 ## Running
 
 ```bash
-# N = number of shots; target mode via env var
+# N is the number of shots, and the target mode comes from an env var
 IRN_TARGET_MODE=RANDOMENEMY python ironnest_parallel_rr.py 100
 ```
 
-Useful env vars: `IRN_TARGET_MODE` (`ARTILLERY` | `RANDOMENEMY`), `IRN_ONLY_GUN` (`GunLeft`/`GunRight`),
-`IRN_VALVE_TEST=1` (spring random leaks to exercise the auto-reseal).
+The program reads a few environment variables. `IRN_TARGET_MODE` chooses targets and takes the value `ARTILLERY` or `RANDOMENEMY`. `IRN_ONLY_GUN` limits firing to one gun and takes `GunLeft` or `GunRight`. `IRN_VALVE_TEST=1` springs random leaks so you can watch the auto reseal handle them.
 
-> **Paths:** the scripts were developed with a `SCR` constant and some temp-file paths pointing at an
-> absolute development scratchpad directory. To run from a clean checkout, point `SCR` (in
-> `ironnest_parallel_rr.py`) and the temp-file paths (in `draw_from_player.py`) at this folder.
+One note about paths. The scripts grew up with a `SCR` constant and some temp file paths that point at an absolute development scratch directory. To run them from a fresh checkout, set `SCR` in `ironnest_parallel_rr.py` and the temp file paths in `draw_from_player.py` to this folder.
 
 ## Validation
 
-Validated with two consecutive clean **100-shot** runs (fresh and depleted battlefields): 100/100 shots,
-**zero stalls**, correct HE/AP selection, and dozens of natural steam leaks auto-resealed with no
-pressure-stall — at a steady ~38–40 s/shot wall-clock (the shared turret is the serial resource).
+The loader passed two clean runs back to back, one on a fresh battlefield and one on a depleted one. Each run fired all of its shots, 100 out of 100, with zero stalls and correct HE and AP selection. Dozens of natural steam leaks resealed themselves during the runs with no pressure stall. The pace held steady at about 38 to 40 seconds per shot, since the shared turret is the one resource both guns must wait for.
