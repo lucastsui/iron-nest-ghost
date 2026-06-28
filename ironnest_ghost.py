@@ -26,7 +26,7 @@ Usage:
 """
 import ctypes, ctypes.wintypes as wt, struct, sys, time
 
-DLL = r"C:\Program Files (x86)\Steam\steamapps\common\IRON NEST Heavy Turret Simulator Demo\GameAssembly.dll"
+DLL = r"C:\Program Files (x86)\Steam\steamapps\common\IRON NEST Heavy Turret Simulator Demo\GameAssembly.dll"  # fallback only; auto-detected from the running game below
 PROC_NAME = "Iron Nest Heavy Turret Simulator.exe"
 MODNAME   = "GameAssembly.dll"
 
@@ -99,6 +99,26 @@ def module_base(pid):
         if m.mod.decode(errors="ignore").lower()==MODNAME.lower(): base=ctypes.cast(m.base,ctypes.c_void_p).value; break
         ok=Module32Next(snap,ctypes.byref(m))
     CloseHandle(snap); return base
+
+def module_path(pid, modname=MODNAME):
+    """On-disk path of a loaded module in the target process, so the game can be installed anywhere."""
+    snap=CreateToolhelp32Snapshot(TH32_MODULE,pid); m=ME32(); m.dwSize=ctypes.sizeof(ME32)
+    ok=Module32First(snap,ctypes.byref(m)); path=None
+    while ok:
+        if m.mod.decode(errors="ignore").lower()==modname.lower(): path=m.path.decode(errors="ignore"); break
+        ok=Module32Next(snap,ctypes.byref(m))
+    CloseHandle(snap); return path
+
+def _autodetect_dll(fallback):
+    """Resolve GameAssembly.dll from the running game's module list; fall back to the hardcoded path."""
+    try:
+        pid=find_pid()
+        if pid:
+            p=module_path(pid)
+            if p: return p
+    except Exception: pass
+    return fallback
+DLL=_autodetect_dll(DLL)
 
 def export_rvas(path):
     d=open(path,"rb").read()

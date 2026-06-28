@@ -1,7 +1,7 @@
 """Clear leftover chambered rounds (from a mid-run kill) by finishing any mid-charge then discharging,
    leaving both guns at a clean BreechOpen. Reuses the pipeline's proven Gun class."""
 import sys, os, time, struct
-GHOST=r"C:\Users\Owner\Desktop\Iron Nest Hack"
+GHOST=os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, GHOST)
 import ironnest_ghost as G
 import ironnest_parallel_rr as P

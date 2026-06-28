@@ -25,7 +25,7 @@ Between volleys both guns re-stage in parallel, overlapping both reload recoveri
 import sys, os, time, struct, re, subprocess, random
 
 GHOST = os.path.dirname(os.path.abspath(__file__))
-SCR   = r"C:\Users\Owner\AppData\Local\Temp\claude\C--Users-Owner\776c532f-07d9-4785-9015-6eaac32a484e\scratchpad"
+SCR   = GHOST   # project dir holds the helper scripts AND the IPC temp files (_shot/_target/_line_go)
 sys.path.insert(0, GHOST)
 import ironnest_ghost as G
 PY = sys.executable

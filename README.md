@@ -15,6 +15,8 @@ The video above shows the loader running both guns with no human help. Click the
 - `ironnest_ghost.py` is the ghost layer. It attaches to the game process, does the memory reads and writes, runs an inline executor that calls game methods on the main thread, and resolves IL2CPP names by walking from the domain down to the assemblies, then the classes, and then the methods and fields through the `il2cpp_*` exports.
 - `ironnest_probe.py` probes and maps the field offsets for `TurretController`, `GunController`, and the other game classes.
 - `ironnest_parallel_rr.py` is the autoloader and the main program. It runs the pipelined two gun round robin fire-control loop.
+- `fire.bat` / `fire.ps1` is the one-click launcher. Double-click `fire.bat` and it starts the game if it is not running, loads the Chill sandbox, dismisses the intro popup, and runs the autoloader so both turrets fire on their own.
+- `launch_chill.ps1` gets you into the Chill sandbox from a cold start (launch the game, load the mission, dismiss the popup) without firing. `launch_mission.py` is the lower level menu driver: it calls the game's own `MissionManager` methods through IL2CPP to press PLAY (`EnterBrowsingMap`) and start a mission (`StartOperation`) directly, so no part of the menu needs a mouse click.
 - `draw_from_player.py` handles targeting. It reads the player's grid position, draws the map line to a target, and picks the shell type with the icon based shell picker.
 - `scan_enemies.py` and `scan_artillery.py` are read only scanners that find live targets by their entity icon and health.
 - `remove_line.py` clears the drawn map marker lines.
@@ -44,7 +46,7 @@ These are the game internals that took real work to figure out.
 ## Requirements
 
 - Windows. The program calls the Win32 API (`OpenProcess`, `ReadProcessMemory`, `WriteProcessMemory`, `VirtualAllocEx`) through `ctypes`, so it does not run on macOS or Linux.
-- IRON NEST: Heavy Turret Simulator (Demo), installed and running. The ghost attaches by the process name `Iron Nest Heavy Turret Simulator.exe` and reads `GameAssembly.dll`. The default Steam install path is baked into `ironnest_ghost.py` as the `DLL` constant, so change it if your copy lives elsewhere.
+- IRON NEST: Heavy Turret Simulator (Demo), installed and running. The ghost attaches by the process name `Iron Nest Heavy Turret Simulator.exe` and reads `GameAssembly.dll`. The DLL path is auto-detected from the running game's module list, so the game can be installed anywhere; the `DLL` constant in `ironnest_ghost.py`/`ironnest_probe.py`/`ironnest_freezer.py` is only a fallback used if the game isn't running yet.
 - Python 3.8 or newer. There is nothing to `pip install`. Every import is from the standard library, so a plain CPython install is enough. The author ran it on Python 3.11.
 - A terminal launched as Administrator. Writing another process's memory and running the inline executor need it.
 
@@ -55,20 +57,34 @@ git clone https://github.com/lucastsui/iron-nest-ghost
 cd iron-nest-ghost
 ```
 
-The scripts grew up in a fixed development folder, so a few absolute paths are still hardcoded and you must point them at your own checkout before the autoloader will run. Set every one of these to the folder you cloned into.
-
-| File | What to change |
-| --- | --- |
-| `ironnest_parallel_rr.py` | the `SCR` constant near the top. The main loop runs the helper scripts and writes its per-run temp files from here, so it must be your checkout folder. |
-| `draw_from_player.py` | the `sys.path.insert(...)` path, and `LGO` (a `_line_go.txt` temp path) |
-| `scan_enemies.py`, `scan_artillery.py`, `remove_line.py`, `find_valves_full.py` | the `sys.path.insert(...)` path |
-| `check_both_guns.py`, `discharge_clean.py` | the `GHOST` constant |
-
-`ironnest_parallel_rr.py` already finds its own folder through `__file__`, so the only constant you change there is `SCR`.
+No path editing is needed. Every script derives its own folder from `__file__` (so it finds `ironnest_ghost.py`, the helper scripts, and writes its temp files there), and the game's `GameAssembly.dll` is auto-detected from the running process. Clone or move the folder anywhere, install the game anywhere, and it just runs.
 
 ## Usage
 
-Start the game first and begin a mission, then keep the game window in the foreground while any script runs. The game freezes its `Update()` loop when it is not the focused app, so nothing on the turret moves while you are looking at another window. Each script force-focuses the game when it starts, but do not alt-tab away while it works.
+### Quick start: one click to make the turrets fire
+
+Double-click **`fire.bat`**. It launches the game if it is not already running, loads the Chill sandbox (a no-timer playground), dismisses the intro popup, and runs the autoloader so both turrets start firing on their own. The window stays open at the end so you can read the shot log.
+
+```text
+fire.bat                 # 12 shots at random enemies (default)
+fire.bat 20              # 20 shots
+fire.bat 30 ARTILLERY    # 30 shots, aimed at enemy artillery
+```
+
+That is all most people need. The rest of this section covers running the pieces by hand.
+
+### Getting into a mission
+
+You can start the game and pick a mission yourself, or let the launcher do it from a cold start:
+
+```powershell
+# launch the game (if needed) -> load the Chill sandbox -> dismiss the popup, no firing
+powershell -ExecutionPolicy Bypass -File launch_chill.ps1
+```
+
+Under the hood `launch_mission.py` drives the menu through IL2CPP, with no mouse clicks: `python launch_mission.py map` presses PLAY (`EnterBrowsingMap`), and `python launch_mission.py startop Tutorial Chill` starts the Chill mission (`StartOperation`) straight from the menu.
+
+Keep the game window in the foreground while any script runs. The game freezes its `Update()` loop when it is not the focused app, so nothing on the turret moves while you are looking at another window. Each script force-focuses the game when it starts, but do not alt-tab away while it works.
 
 The environment-variable examples below use PowerShell. In `cmd` run `set NAME=value` on its own line first, and on a bash-like shell write `NAME=value python ...` as one line.
 

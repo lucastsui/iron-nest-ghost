@@ -1,6 +1,6 @@
 """Read-only: dump both guns' reload state / breech / chamber so we know it's safe to drive."""
 import sys, os
-GHOST=r"C:\Users\Owner\Desktop\Iron Nest Hack"
+GHOST=os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, GHOST)
 import ironnest_ghost as G
 

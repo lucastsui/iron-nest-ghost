@@ -1,8 +1,7 @@
 """Read-only: print live ENEMY entity IDs (any 'Enemy' icon, hp>0) for the pipeline's target picker.
 Draws NOTHING -> no line-drawing sound. Includes hostile units AND artillery (more targets)."""
-import sys, struct
-GHOST=r"C:\Users\Owner\Desktop\Iron Nest Hack"
-sys.path.insert(0, GHOST)
+import sys, struct, os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ironnest_ghost as G
 g=G.Ghost(); g.focus_game(); g.resolve()
 def rstr(p):

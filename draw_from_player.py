@@ -6,7 +6,7 @@ identity rotation, Initialize+UpdateLine, SetLabelsVisible, add to placedMarkers
   usage: python draw_from_player.py [PLAYER_CODE='D5 2:2'] [targetName]
 """
 import sys, struct, math, time, os, random
-sys.path.insert(0, r"C:\Users\Owner\Desktop\Iron Nest Hack")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ironnest_ghost as G
 g=G.Ghost(); g.focus_game(); g.resolve(); g.ensure_executor()
 F=g.F
@@ -109,7 +109,7 @@ print("PLAYER grid %s -> local=(%.3f,%.3f)"%(PLAYER_CODE, player[0],player[1]))
 
 placer=g.find_objects("MapMarkerPlacer")[0]; prefab=g.rptr(placer+0x30); mapRect=g.rptr(placer+0x80)
 # clean slate: clear placer.placedMarkers (avoid dead refs) then destroy all existing lines
-LGO=r"C:\Users\Owner\AppData\Local\Temp\claude\C--Users-Owner\776c532f-07d9-4785-9015-6eaac32a484e\scratchpad\_line_go.txt"
+LGO=os.path.join(os.path.dirname(os.path.abspath(__file__)), "_line_go.txt")   # project dir (matches parallel_rr SCR)
 existing=g.find_objects("MapMarkerLineUI")
 g.wpm(g.rptr(placer+0x88)+0x18, struct.pack("<i",0))    # placedMarkers count = 0
 for L in existing:

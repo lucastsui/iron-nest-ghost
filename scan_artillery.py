@@ -1,5 +1,5 @@
-import sys, struct
-sys.path.insert(0, r"C:\Users\Owner\Desktop\Iron Nest Hack")
+import sys, struct, os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ironnest_ghost as G
 g=G.Ghost(); g.resolve()
 def rstr(p):

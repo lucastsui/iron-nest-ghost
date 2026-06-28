@@ -1,7 +1,7 @@
 """List all 23 valves with their lever (dial), GameObject names, leak state, and pressure system,
    plus each HighPressureSystemManager's health + which systems are currently blocked."""
-import sys
-sys.path.insert(0, r"C:\Users\Owner\Desktop\Iron Nest Hack")
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ironnest_ghost as G
 g=G.Ghost(); g.focus_game(); g.resolve(); g.ensure_executor()
 F=g.F
