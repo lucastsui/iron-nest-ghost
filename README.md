@@ -52,7 +52,7 @@ These are the game internals that took real work to figure out.
 
 - Windows. The program calls the Win32 API (`OpenProcess`, `ReadProcessMemory`, `WriteProcessMemory`, `VirtualAllocEx`) through `ctypes`, so it does not run on macOS or Linux.
 - IRON NEST: Heavy Turret Simulator (Demo), installed and running. The ghost attaches by the process name `Iron Nest Heavy Turret Simulator.exe` and reads `GameAssembly.dll`. The DLL path is auto-detected from the running game's module list, so the game can be installed anywhere; the `DLL` constant in `ironnest_ghost.py`/`ironnest_probe.py`/`ironnest_freezer.py` is only a fallback used if the game isn't running yet.
-- Python 3.8 or newer. There is nothing to `pip install`. Every import is from the standard library, so a plain CPython install is enough. The author ran it on Python 3.11.
+- Python 3.8 or newer, or none at all. There is nothing to `pip install`; every import is from the standard library. If you do not have Python, `setup.bat` (also run automatically by `fire.bat`) fetches a portable copy into `.\python`, so you can run the project without installing anything. The author ran it on Python 3.11.
 - A terminal launched as Administrator. Writing another process's memory and running the inline executor need it.
 
 ## Setup
@@ -63,6 +63,8 @@ cd iron-nest-ghost
 ```
 
 No path editing is needed. Every script derives its own folder from `__file__` (so it finds `ironnest_ghost.py`, the helper scripts, and writes its temp files there), and the game's `GameAssembly.dll` is auto-detected from the running process. Clone or move the folder anywhere, install the game anywhere, and it just runs.
+
+You do not even need Python installed. `fire.bat` uses a system `python` if you have one; otherwise it downloads a portable Python into `.\python` on first run (or run `setup.bat` yourself to pre-fetch it). That portable runtime is gitignored, so it is not committed — a fresh clone fetches it once on first use. If you would rather have it fully offline, delete the `python/` line from `.gitignore` and commit the folder.
 
 ## Usage
 

@@ -3,6 +3,9 @@ __pycache__/
 *.pyc
 *.pyo
 
+# Bundled portable Python runtime (fetched by setup.bat / fire.bat; not committed)
+python/
+
 # Runtime state / per-run artifacts
 _cylinder_model*.txt
 _shot.txt

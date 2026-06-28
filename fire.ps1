@@ -8,6 +8,8 @@
 param([int]$shots = 12, [string]$mode = "RANDOMENEMY")
 $ErrorActionPreference = "Stop"
 $proj = $PSScriptRoot
+# Python to use: the bundled/selected one from fire.bat, else a system "python".
+$py = if ($env:IRN_PYTHON) { $env:IRN_PYTHON } else { "python" }
 
 Write-Host "=== IRON NEST one-click fire: $shots shots, target mode $mode ===" -ForegroundColor Cyan
 
@@ -18,7 +20,7 @@ Write-Host "=== IRON NEST one-click fire: $shots shots, target mode $mode ===" -
 #    auto-reloading, auto-reselecting AP/HE per target, auto-resealing steam valves.
 Push-Location $proj
 $env:IRN_TARGET_MODE = $mode
-python -u ironnest_parallel_rr.py $shots
+& $py -u ironnest_parallel_rr.py $shots
 Pop-Location
 
 Write-Host "=== firing run complete ===" -ForegroundColor Cyan

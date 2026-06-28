@@ -9,6 +9,7 @@ param([double]$cx = 0.533, [double]$cy = 0.555, [int]$appid = 4300500)
 $ErrorActionPreference = "Stop"
 $proj = $PSScriptRoot                               # this script's own folder (the project dir)
 $shot = Join-Path $env:TEMP "iron_nest_launch.png"  # portable temp location for the confirmation screenshot
+$py   = if ($env:IRN_PYTHON) { $env:IRN_PYTHON } else { "python" }   # bundled or system Python
 
 Add-Type -AssemblyName System.Drawing
 Add-Type @"
@@ -67,7 +68,7 @@ Focus-Game | Out-Null
 # 2. launch the Chill mission via IL2CPP (works from menu OR map)
 Write-Output "StartOperation(Tutorial, Chill)..."
 Push-Location $proj
-python launch_mission.py startop Tutorial Chill 2>&1 | Select-String "phase|scene|StartOperation"
+& $py launch_mission.py startop Tutorial Chill 2>&1 | Select-String "phase|scene|StartOperation"
 Pop-Location
 
 # 3. wait for scene + notification, then dismiss CONTINUE (1st click hovers, 2nd activates)
