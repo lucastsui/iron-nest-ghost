@@ -4,6 +4,11 @@ This is a Python program that plays the game IRON NEST, a heavy turret artillery
 
 > This is authorized reverse engineering and modding of a single player demo, done on the author's own machine for research and learning. It changes only the local game process and nothing else.
 
+# TLDR
+1. Luanch the game, go to a mission.
+2. fire.bat
+3. GLORY TO CASTILE!
+
 ## Demo
 
 [![Machine Spirit in Heavy Artillery](https://img.youtube.com/vi/Gz33NfPVncA/maxresdefault.jpg)](https://www.youtube.com/watch?v=Gz33NfPVncA)
