@@ -6,7 +6,7 @@ This is a Python program that plays the game IRON NEST, a heavy turret artillery
 
 # TLDR
 1. Luanch the game, go to a mission.
-2. fire.bat
+2. Launch fire.bat
 3. GLORY TO CASTILE!
 
 ## Demo
