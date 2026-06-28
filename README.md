@@ -41,16 +41,109 @@ These are the game internals that took real work to figure out.
 - The loader reseals steam valves on its own, so it never stalls for lack of pressure.
 - The loader picks the shell to match the target. Armored targets like tanks, bunkers, caches, and fire direction centers get AP rounds, and soft targets like infantry and field artillery get HE rounds.
 
-## Running
+## Requirements
+
+- Windows. The program calls the Win32 API (`OpenProcess`, `ReadProcessMemory`, `WriteProcessMemory`, `VirtualAllocEx`) through `ctypes`, so it does not run on macOS or Linux.
+- IRON NEST: Heavy Turret Simulator (Demo), installed and running. The ghost attaches by the process name `Iron Nest Heavy Turret Simulator.exe` and reads `GameAssembly.dll`. The default Steam install path is baked into `ironnest_ghost.py` as the `DLL` constant, so change it if your copy lives elsewhere.
+- Python 3.8 or newer. There is nothing to `pip install`. Every import is from the standard library, so a plain CPython install is enough. The author ran it on Python 3.11.
+- A terminal launched as Administrator. Writing another process's memory and running the inline executor need it.
+
+## Setup
 
 ```bash
-# N is the number of shots, and the target mode comes from an env var
-IRN_TARGET_MODE=RANDOMENEMY python ironnest_parallel_rr.py 100
+git clone https://github.com/lucastsui/iron-nest-ghost
+cd iron-nest-ghost
 ```
 
-The program reads a few environment variables. `IRN_TARGET_MODE` chooses targets and takes the value `ARTILLERY` or `RANDOMENEMY`. `IRN_ONLY_GUN` limits firing to one gun and takes `GunLeft` or `GunRight`. `IRN_VALVE_TEST=1` springs random leaks so you can watch the auto reseal handle them.
+The scripts grew up in a fixed development folder, so a few absolute paths are still hardcoded and you must point them at your own checkout before the autoloader will run. Set every one of these to the folder you cloned into.
 
-One note about paths. The scripts grew up with a `SCR` constant and some temp file paths that point at an absolute development scratch directory. To run them from a fresh checkout, set `SCR` in `ironnest_parallel_rr.py` and the temp file paths in `draw_from_player.py` to this folder.
+| File | What to change |
+| --- | --- |
+| `ironnest_parallel_rr.py` | the `SCR` constant near the top. The main loop runs the helper scripts and writes its per-run temp files from here, so it must be your checkout folder. |
+| `draw_from_player.py` | the `sys.path.insert(...)` path, and `LGO` (a `_line_go.txt` temp path) |
+| `scan_enemies.py`, `scan_artillery.py`, `remove_line.py`, `find_valves_full.py` | the `sys.path.insert(...)` path |
+| `check_both_guns.py`, `discharge_clean.py` | the `GHOST` constant |
+
+`ironnest_parallel_rr.py` already finds its own folder through `__file__`, so the only constant you change there is `SCR`.
+
+## Usage
+
+Start the game first and begin a mission, then keep the game window in the foreground while any script runs. The game freezes its `Update()` loop when it is not the focused app, so nothing on the turret moves while you are looking at another window. Each script force-focuses the game when it starts, but do not alt-tab away while it works.
+
+The environment-variable examples below use PowerShell. In `cmd` run `set NAME=value` on its own line first, and on a bash-like shell write `NAME=value python ...` as one line.
+
+### Check that it attaches
+
+A read-only state dump is the first thing to run, to confirm the ghost can see the game:
+
+```powershell
+python ironnest_ghost.py
+```
+
+Then watch the handwheels drive themselves, with no firing:
+
+```powershell
+python ironnest_ghost.py demo
+```
+
+`ironnest_ghost.py` also takes direct turret commands. `rot=20` aims to absolute bearing 20, `slew=+25` turns 25 degrees from where it is now, `elev=15` raises the barrels to 15 degrees, and `fire` fires the controlled gun once. You can combine them, for example `python ironnest_ghost.py rot=30 elev=12 fire`.
+
+### Run the autoloader
+
+This is the main program. It plays both guns on its own for N shots.
+
+```powershell
+# N shots, target mode from an env var
+$env:IRN_TARGET_MODE="RANDOMENEMY"; python ironnest_parallel_rr.py 100
+```
+
+If you omit N it fires 4 shots. The environment variables it reads:
+
+| Variable | Values | Effect |
+| --- | --- | --- |
+| `IRN_TARGET_MODE` | `ARTILLERY` (default), `RANDOMENEMY` | how it chooses targets |
+| `IRN_ONLY_GUN` | `GunLeft`, `GunRight` | restrict firing to one gun, for focused tests |
+| `IRN_VALVE_TEST` | `1` | spring random steam leaks so you can watch the auto-reseal handle them |
+
+There is also a no-fire staging test that pre-stages both guns in parallel and then stops, which needs no targets on the field:
+
+```powershell
+python ironnest_parallel_rr.py STAGE
+```
+
+### Fire a single mission by hand
+
+Given a bearing and a range read off the map, this runs one full firing cycle on one gun, covering the calculator card, the revolver load, the traverse, the elevation, and the shot:
+
+```powershell
+python ironnest_fire_mission.py <bearing> <range> [powder=3]
+# e.g.
+python ironnest_fire_mission.py 51.0 3.31
+```
+
+Set `IRN_SHELL` to `HE` or `AP` to choose the shell, and `IRN_GUN` to `GunLeft` or `GunRight` to choose the gun.
+
+### Targeting and diagnostics
+
+These help when you are debugging a run or want to see what the loader sees.
+
+- `python scan_enemies.py` and `python scan_artillery.py` list live targets, read-only.
+- `python draw_from_player.py [RANDOM|<entity name>]` reads your grid position and draws the map line to a target. With no argument it picks the nearest hostile. `IRN_PLAYER` overrides the auto-read grid code, and `IRN_EXCLUDE` is a comma-separated list of targets to skip.
+- `python remove_line.py` clears any map marker lines the targeting drew.
+- `python check_both_guns.py` dumps each gun's reload state, whether it is chambered, whether it can fire, how full the cylinder is, and its elevation.
+- `python discharge_clean.py` discharges any chambered round and resets both guns to a clean BreechOpen state. Run it if a run leaves a gun mid-cycle.
+- `python find_valves_full.py` maps the steam valve pressure system.
+- `python ironnest_probe.py <Substr,Substr>` lists the IL2CPP classes whose names match and dumps the fields and methods of any class matching the substrings you pass. Use it to re-map field offsets if a game update moves them. `IRN_KW` overrides the class-name filter.
+
+### Optional: unlimited time and requisition
+
+For long sessions without the mission timer running out or running short on requisition points, the freezer locks the timer and sets the points high.
+
+```powershell
+python ironnest_freezer.py set=999999
+```
+
+`set=` is the requisition amount, and `secs=N` stops after N seconds (0, the default, runs until you press Ctrl+C). `IronNest_Freeze.bat` is a one-click launcher for the same thing, though you will need to edit the Python and script paths inside it to match your machine. `IronNest_AutoFreeze.CT` is a Cheat Engine table that does the equivalent if you prefer Cheat Engine.
 
 ## Validation
 
