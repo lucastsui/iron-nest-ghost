@@ -1,6 +1,6 @@
 import ctypes, ctypes.wintypes as wt, struct, sys, time, os
 
-DLL = r"C:\Program Files (x86)\Steam\steamapps\common\IRON NEST Heavy Turret Simulator Demo\GameAssembly.dll"  # fallback only; auto-detected from the running game below
+DLL = ""  # auto-detected from the running game's module list below
 PROC_NAME = "Iron Nest Heavy Turret Simulator.exe"
 MODNAME   = "GameAssembly.dll"
 
